@@ -23,9 +23,9 @@ namespace Receiver_server
 
             while (true)
             {
-                using Socket client = socket.Accept();
-                Console.WriteLine($"Адрес подключенного клиента: {client}");
-                await Task.Factory.StartNew(() => ProcessClient(client));
+                clients.Add(await socket.AcceptAsync());
+                Console.WriteLine($"Адрес подключенного клиента: {clients.Last().RemoteEndPoint}");
+                Task.Factory.StartNew(async () => await ProcessClientAsync(clients.Last()));
             }
 
         }
@@ -42,37 +42,27 @@ namespace Receiver_server
             }
         }
 
-        private static void ProcessClient(Socket client)
+        private static async Task ProcessClientAsync(Socket client)
         {
             var buffer = new byte[1024];
             int recievedBytesCount = 0;
-            recievedBytesCount = client.Receive(buffer);
+            recievedBytesCount = await client.ReceiveAsync(buffer);
             Console.Out.WriteLine($"" +
-                $"imei str= {Encoding.UTF8.GetString(buffer.Skip(4).Take(15).ToArray())}" +
-                $"imei int8= {BitConverter.ToUInt16(buffer.Skip(4).Take(15).ToArray())}"
-                );
-            if (recievedBytesCount == 0)
-                client.DisconnectAsync(false);
+                $"imei str= {Encoding.UTF8.GetString(buffer.Skip(4).Take(15).ToArray())}");
 
             int remainingBytesCount = 0;
             while (true)
             {
-                recievedBytesCount = client.Receive(buffer);
-                if (recievedBytesCount == 0)
+                recievedBytesCount = await client.ReceiveAsync(buffer);
+                if (recievedBytesCount != 0)
                 {
-                    client.DisconnectAsync(false);
-                    break;
+                    for (int i = 0; i < recievedBytesCount; i += buffer[2 + i])
+                    {
+                        Console.Out.WriteLine($"" +
+                        $"lon= {BitConverter.ToDouble(buffer.Skip(10).Take(4).ToArray())}" +
+                        $"lat= {BitConverter.ToDouble(buffer.Skip(14).Take(4).ToArray())}"
+                    );}
                 }
-
-                for (int i = 0; i < recievedBytesCount; i += buffer[2 + i])
-                {
-                    Console.Out.WriteLine($"" +
-                    $"imei lon= {BitConverter.ToDouble(buffer.Skip(10).Take(4).ToArray())}" +
-                    $"imei lat= {BitConverter.ToDouble(buffer.Skip(14).Take(4).ToArray())}"
-                );
-                }
-;
-
             }
         }
     }
