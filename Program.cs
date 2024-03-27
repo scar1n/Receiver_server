@@ -5,6 +5,7 @@ using System.Text;
 using System.Data;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Diagnostics.SymbolStore;
 
 namespace Receiver_server
 {
@@ -25,14 +26,15 @@ namespace Receiver_server
             {
                 clients.Add(await socket.AcceptAsync());
                 Console.WriteLine($"Адрес подключенного клиента: {clients.Last().RemoteEndPoint}");
-                Task.Factory.StartNew(async () => await ProcessClientAsync(clients.Last()));
+                Task.Run(async () => await ProcessClientAsync(clients.Last()));
             }
 
         }
 
         private static void CheckClientsAvalibale(List<Socket> clients)
         {
-            Thread.Sleep(1500);
+            Thread.Sleep(1000);
+            
             foreach (Socket client in clients)
             {
                 if (!client.Connected) {
@@ -40,6 +42,7 @@ namespace Receiver_server
                     Console.WriteLine($"Отключен {client.RemoteEndPoint}");
                 }
             }
+            foreach (Socket client in clients) Console.Out.WriteLine(client.RemoteEndPoint);
         }
 
         private static async Task ProcessClientAsync(Socket client)
@@ -56,12 +59,18 @@ namespace Receiver_server
                 recievedBytesCount = await client.ReceiveAsync(buffer);
                 if (recievedBytesCount != 0)
                 {
-                    for (int i = 0; i < recievedBytesCount; i += buffer[2 + i])
+                    for (int i = 0; i + buffer[2 + i] < recievedBytesCount; i += buffer[2 + i])
                     {
+                        var lat = buffer.Skip(9 + i).Take(4).ToArray();
+                        var lon = buffer.Skip(13 + i).Take(4).ToArray();
                         Console.Out.WriteLine($"" +
-                        $"lon= {BitConverter.ToDouble(buffer.Skip(10).Take(4).ToArray())}" +
-                        $"lat= {BitConverter.ToDouble(buffer.Skip(14).Take(4).ToArray())}"
-                    );}
+                        $"lon= {BitConverter.ToSingle(lon)}" +
+                        $"lat= {BitConverter.ToSingle(lat)}");
+                    }
+                }
+                else
+                {
+                    break;
                 }
             }
         }
