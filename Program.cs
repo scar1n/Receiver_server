@@ -1,6 +1,8 @@
 ﻿using System.Net.Sockets;
 using System.Net;
 using System.Text;
+using Npgsql;
+using System.Configuration;
 
 namespace Receiver_server
 {
@@ -10,8 +12,12 @@ namespace Receiver_server
         static async Task Main(string[] args)
         {
             List<Socket> clients = new List<Socket>();
-            IPEndPoint ipPoint = new IPEndPoint(IPAddress.Any, 40432);
+
+
+
             using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            IPEndPoint ipPoint = new IPEndPoint(IPAddress.Any, 40432);
+
             socket.Bind(ipPoint);
             socket.Listen();
             Console.WriteLine("Сервер запущен. Ожидание подключений...");
@@ -60,6 +66,7 @@ namespace Receiver_server
                     int i = 0;
                     for (; i + packet[2 + i] < packet.Count; i += packet[2 + i])
                     {
+                        Console.WriteLine(BitConverter.ToUInt16(packet.Skip(5 + i).Take(2).ToArray()).ToString()); ;
                         ParseGeodata(packet.Take(packet[2 + i]).ToList());
                     }
 
@@ -100,6 +107,34 @@ namespace Receiver_server
             int vBattery = BitConverter.ToUInt16(vBatteryBytes);
 
             Console.WriteLine($"{lat}\t{lon}\t{course} {height} {speed} {satCount} {dateTime} {vBattery}");
+
+            CallProcedureAsync(lat, lon, course, speed, height, satCount, dateTime, vBattery);
+        }
+        private static void CallProcedureAsync(double lat, double lon, double course, float speed, int height, int satCount, DateTime dateTime, int vBattery)
+        {
+            var connectionString = $"Host={ConfigurationManager.AppSettings.Get("db_host")};" +
+                $"Username={ConfigurationManager.AppSettings.Get("db_user")};" +
+                $"Password={ConfigurationManager.AppSettings.Get("db_password")};" +
+                $"Database={ConfigurationManager.AppSettings.Get("db_name")}";
+
+            using (NpgsqlConnection conn = new NpgsqlConnection(connectionString))
+            {
+                conn.Open();
+                string query = $"CALL zxc.occupancy(1," +
+                    $"{lat.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
+                    $"{lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
+                    $"{height}," +
+                    $"{speed}," +
+                    $"'{dateTime}'," +
+                    $"{course}," +
+                    $"{vBattery}," +
+                    $"{satCount});";
+                
+                using NpgsqlCommand cmd = new NpgsqlCommand(query, conn);
+                using var reader = cmd.ExecuteReader();
+                Console.WriteLine(reader.ToString());
+                conn.Close();
+            }
         }
     }
 }
